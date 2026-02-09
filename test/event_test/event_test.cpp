@@ -1,3 +1,13 @@
+/**
+ * @file event_test.cpp
+ *
+ * @author Ángel Fernández Pineda. Madrid. Spain. 2026.
+ * @brief Publish-subscribe pattern
+ * @date 2026-02-07
+ *
+ * @copyright EUPL 1.2 License
+ */
+
 #include "event.hpp"
 #include <cassert>
 #include <iostream>
@@ -103,7 +113,7 @@ void test3()
 
 void test4()
 {
-    cout << "- Subscribe/unsubscribe twice or more times-" << endl;
+    cout << "- Subscribe/unsubscribe twice or more times -" << endl;
     event evt;
     evt += Mock::class_callback;
     evt += Mock::class_callback;
