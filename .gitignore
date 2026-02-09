@@ -30,3 +30,21 @@
 *.exe
 *.out
 *.app
+
+# Doxygen output
+doc/API
+
+# visual studio code
+
+.vscode/*
+
+# Local History for Visual Studio Code
+.history/
+
+# Code coverage and profiling
+*.gcno
+*.gcda
+*.gcov
+
+# other
+debug/
