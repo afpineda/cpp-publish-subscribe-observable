@@ -143,6 +143,50 @@ void test5()
     assert(!evt.is_subscribed(Mock::class_callback));
 }
 
+void test6()
+{
+    cout << "- Copy and move -" << endl;
+    {
+        // copy assignment
+        event source;
+        event dest;
+        source += Mock::class_callback;
+        dest = source;
+        assert(source.subscribed() == 1);
+        assert(dest.subscribed() == 1);
+    }
+    {
+        // Copy constructor
+        event source;
+        source += Mock::class_callback;
+        event dest{source};
+        assert(source.subscribed() == 1);
+        assert(dest.subscribed() == 1);
+    }
+    {
+        // move assignment
+        event source;
+        event dest;
+        source += Mock::class_callback;
+        assert(source.subscribed() == 1);
+        assert(dest.subscribed() == 0);
+
+        dest = ::std::move(source);
+        assert(source.subscribed() == 0);
+        assert(dest.subscribed() == 1);
+    }
+    {
+        // move constructor
+        event source;
+        source += Mock::class_callback;
+        assert(source.subscribed() == 1);
+
+        event dest{::std::move(source)};
+        assert(source.subscribed() == 0);
+        assert(dest.subscribed() == 1);
+    }
+}
+
 //------------------------------------------------------------------------------
 // Main
 //------------------------------------------------------------------------------
@@ -154,5 +198,6 @@ int main()
     test3();
     test4();
     test5();
+    test6();
     return 0;
 }

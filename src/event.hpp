@@ -114,7 +114,7 @@ public:
     }
 
     /**
-   * @brief Unsubscribe
+     * @brief Unsubscribe
      *
      * @note Thread-safe
      * @note No effect if not subscribed
@@ -225,6 +225,61 @@ public:
     ::std::size_t subscribed()
     {
         return _callback.size();
+    }
+
+    /**
+     * @brief Move-assignment
+     *
+     * @param source Rvalue
+     * @return type& Reference to this instance
+     */
+    type &operator=(type &&source) noexcept
+    {
+        ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
+        _callback.swap(source._callback);
+        _callback_holder.swap(source._callback_holder);
+        return *this;
+    }
+
+    /**
+     * @brief Copy-assignment
+     *
+     * @param source Instance to be copied
+     * @return type& Reference to this instance
+     */
+    type &operator=(const type &source) noexcept
+    {
+        ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
+        _callback = source._callback;
+        _callback_holder = _callback_holder;
+        return *this;
+    }
+
+    /**
+     * @brief Default constructor
+     *
+     */
+    constexpr event() noexcept = default;
+
+    /**
+     * @brief Copy constructor
+     *
+     * @param source Instance to be copied
+     */
+    event(const type &source)
+        : _callback{source._callback},
+          _callback_holder{source._callback_holder},
+          subscribe_mutex{} {}
+
+    /**
+     * @brief Move constructor
+     *
+     * @param source Rvalue
+     */
+    event(type &&source) : subscribe_mutex{}
+    {
+        _callback.swap(source._callback);
+        _callback_holder.swap(source._callback_holder);
     }
 
 private:
