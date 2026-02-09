@@ -54,10 +54,21 @@ struct observable
     constexpr observable(const type &) noexcept = default;
     /// @brief Move constructor (default)
     constexpr observable(type &&) noexcept = default;
-    /// @brief Copy-assignment (default)
-    constexpr type &operator=(const type &) noexcept = default;
     /// @brief Move-assignment (default)
     constexpr type &operator=(type &&) noexcept = default;
+
+    /**
+     * @brief Copy-assignment
+     *
+     * @param source Instance to be copied
+     * @return constexpr type& Reference to this instance
+     */
+    constexpr type &operator=(const type &source) noexcept
+    {
+        _var = source._var;
+        on_change = source.on_change;
+        return *this;
+    }
 
     /// @brief Get the current value
     constexpr operator T() const noexcept { return _var; }
