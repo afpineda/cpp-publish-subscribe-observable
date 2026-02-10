@@ -39,7 +39,7 @@ public:
     using callback_type = typename ::std::function<void(Args...)>;
 
     /**
-     * @brief Subscription handle for managing callback lifetimes
+     * @brief Subscription handler for managing callback lifetimes
      *
      * @note Provides O(1) unsubscribe via generational index
      * @note Invalid after callback is unsubscribed

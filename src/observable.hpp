@@ -93,7 +93,6 @@ struct observable
     }
 
     /// @brief Postfix increment
-    /// @param Unused
     /// @return Copy of this instance holding the previous value
     constexpr type operator++(int)
     {
@@ -113,7 +112,6 @@ struct observable
     }
 
     /// @brief Postfix decrement
-    /// @param Unused
     /// @return Copy of this instance holding the previous value
     constexpr type operator--(int)
     {
@@ -220,7 +218,7 @@ struct observable
     //     on_change(&on_change, _var);
     // }
 
-    // /**
+    // **
     //  * @brief Forcedly dispatch the on_changing and on_change events
     //  *
     //  * @param old_value Previous value.
@@ -239,7 +237,7 @@ struct observable
     //.... Backing variableaccess via context ....
 
     /**
-     * @brief Context to access the backing variable members
+     * @brief Context to access the backing variable
      *
      */
     struct context
@@ -284,6 +282,11 @@ struct observable
         }
     };
 
+    /**
+     * @brief Get access to the backing variable
+     *
+     * @return context Access context
+     */
     [[nodiscard]]
     context with() { return context(*this); }
 
