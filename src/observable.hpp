@@ -284,6 +284,7 @@ struct observable
         }
     };
 
+    [[nodiscard]]
     context with() { return context(*this); }
 
     //.... Public read-only access ....
