@@ -134,7 +134,11 @@ public:
     template <class C, class MemFn>
     subscription_handler subscribe(MemFn member_function, C *obj) noexcept
     {
-        return subscribe(::std::bind(member_function,obj));
+        // Create callback wrapper from member function and object
+        callback_type callback = [member_function, obj](Args... args) {
+            (obj->*member_function)(args...);
+        };
+        return subscribe(callback);
     }
 
     /**
