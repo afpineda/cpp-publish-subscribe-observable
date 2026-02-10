@@ -44,33 +44,27 @@ void test1()
     cout << "- Default constructors and assignments" << endl;
     {
         // move constructor
-        int source_back = 100;
-        observable<int> source{source_back};
+        observable<int> source{100};
         observable<int> dest{::std::move(source)};
         assert(dest == 100);
     }
     {
         // copy constructor
-        int source_back = 100;
-        observable<int> source{source_back};
+        observable<int> source{100};
         observable<int> dest{source};
         assert(dest == 100);
     }
     {
         // move-assignment
-        int source_back = 100;
-        int dest_back = 0;
-        observable<int> source{source_back};
-        observable<int> dest{dest_back};
+        observable<int> source{100};
+        observable<int> dest{0};
         dest = ::std::move(source);
         assert(dest == 100);
     }
     {
         // copy-assignment
-        int source_back = 100;
-        int dest_back = 0;
-        observable<int> source{source_back};
-        observable<int> dest{dest_back};
+        observable<int> source{100};
+        observable<int> dest{0};
         dest = source;
         assert(dest == 100);
     }
@@ -79,10 +73,8 @@ void test1()
 void test2()
 {
     cout << "- Default constructors and assignments (readonly)" << endl;
-    int source_back = 100;
-    int dest_back = 0;
-    observable<int> private_source{source_back};
-    observable<int> private_dest{dest_back};
+    observable<int> private_source{100};
+    observable<int> private_dest{0};
     {
         // move constructor
         observable<int>::readonly source{private_source};
@@ -91,26 +83,21 @@ void test2()
     }
     {
         // copy constructor
-        int source_back = 100;
-        observable<int> source{source_back};
+        observable<int> source{100};
         observable<int> dest{source};
         assert(dest == 100);
     }
     {
         // move-assignment
-        int source_back = 100;
-        int dest_back = 0;
-        observable<int> source{source_back};
-        observable<int> dest{dest_back};
+        observable<int> source{100};
+        observable<int> dest{0};
         dest = ::std::move(source);
         assert(dest == 100);
     }
     {
         // copy-assignment
-        int source_back = 100;
-        int dest_back = 0;
-        observable<int> source{source_back};
-        observable<int> dest{dest_back};
+        observable<int> source{100};
+        observable<int> dest{0};
         dest = source;
         assert(dest == 100);
     }

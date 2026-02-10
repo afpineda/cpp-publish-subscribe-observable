@@ -8,53 +8,47 @@
  * @copyright EUPL 1.2 License
  *
  */
+
 #pragma once
 
 #include "event.hpp"
-#include <type_traits>
 
 /**
  * @brief Observable variable
  *
- * @tparam T Variable type
- * @tparam notify_previous If true, both the previous and new values
- *                         are passed to the subscribed callbacks.
- *                         If false, only the new value is passed.
+ * @tparam T Backing variable type
  */
-template <typename T, bool notify_previous = false>
+template <typename T>
 struct observable
 {
-    static_assert(
-        ::std::is_copy_assignable<T>::value,
-        "T must be copy-assignable in observable<T>");
-
     /// @brief Resulting type of this template instantiation
-    using type = observable<T, notify_previous>;
+    using type = observable<T>;
 
     /// @brief Subscribable event type
-    using event_type = ::std::conditional<
-        notify_previous,
-        event<void *, const T &, const T &>,
-        event<void *, const T &>>::type;
+    using event_type = event<void *, const T &>;
+
+    //.... Subscribable events ....
+
+    /// @brief Subscribable event to notify about to change values
+    event_type on_changing{};
 
     /// @brief Subscribable event to notify value changes
     event_type on_change{};
 
-    /**
-     * @brief Create an observable variable
-     *
-     * @warning The lifetime of the backing variable must match
-     *          the lifetime of this instance.
-     *
-     * @param backing_var Backing variable holding the actual value
-     */
-    constexpr observable(T &backing_var) : _var{backing_var} {}
+    //.... Constructors ....
 
-    /// @brief Copy constructor (default)
+    /// @brief Default initialization constructor
+    constexpr observable() : _var{} {}
+
+    /// @brief Initialization constructor
+    /// @param initial_value Initial value
+    constexpr observable(const T &initial_value) : _var{initial_value} {}
+
+    /// @brief Copy constructor
     constexpr observable(const type &) noexcept = default;
-    /// @brief Move constructor (default)
+    /// @brief Move constructor
     constexpr observable(type &&) noexcept = default;
-    /// @brief Move-assignment (default)
+    /// @brief Move-assignment
     constexpr type &operator=(type &&) noexcept = default;
 
     /**
@@ -70,25 +64,21 @@ struct observable
         return *this;
     }
 
-    /// @brief Get the current value
+    //.... Read ....
+
+    /// @brief Get the value of the backing variable
     constexpr operator T() const noexcept { return _var; }
+
+    //.... Write ....
 
     /// @brief Assign a new value
     /// @param source Value to be assigned
     /// @return Reference to this instance
     constexpr type &operator=(const T &source)
     {
-        if constexpr (notify_previous)
-        {
-            T old_value = _var;
-            _var = source;
-            on_change(&on_change, old_value, source);
-        }
-        else
-        {
-            _var = source;
-            on_change(&on_change, source);
-        }
+        on_changing(&on_changing, _var);
+        _var = source;
+        on_change(&on_change, source);
         return *this;
     }
 
@@ -96,17 +86,9 @@ struct observable
     /// @return Reference to this instance
     constexpr type &operator++() noexcept
     {
-        if constexpr (notify_previous)
-        {
-            T old_value = _var;
-            ++_var;
-            on_change(&on_change, old_value, _var);
-        }
-        else
-        {
-            ++_var;
-            on_change(&on_change, _var);
-        }
+        on_changing(&on_changing, _var);
+        ++_var;
+        on_change(&on_change, _var);
         return *this;
     }
 
@@ -124,17 +106,9 @@ struct observable
     /// @return Reference to this instance
     constexpr type &operator--()
     {
-        if constexpr (notify_previous)
-        {
-            T old_value = _var;
-            --_var;
-            on_change(&on_change, old_value, _var);
-        }
-        else
-        {
-            --_var;
-            on_change(&on_change, _var);
-        }
+        on_changing(&on_changing, _var);
+        --_var;
+        on_change(&on_change, _var);
         return *this;
     }
 
@@ -153,17 +127,9 @@ struct observable
     /// @return Reference to this instance
     constexpr type &operator+=(const T &rhs)
     {
-        if constexpr (notify_previous)
-        {
-            T old_value = _var;
-            _var += rhs;
-            on_change(&on_change, old_value, _var);
-        }
-        else
-        {
-            _var += rhs;
-            on_change(&on_change, _var);
-        }
+        on_changing(&on_changing, _var);
+        _var += rhs;
+        on_change(&on_change, _var);
         return *this;
     }
 
@@ -172,17 +138,9 @@ struct observable
     /// @return Reference to this instance
     constexpr type &operator-=(const T &rhs)
     {
-        if constexpr (notify_previous)
-        {
-            T old_value = _var;
-            _var -= rhs;
-            on_change(&on_change, old_value, _var);
-        }
-        else
-        {
-            _var -= rhs;
-            on_change(&on_change, _var);
-        }
+        on_changing(&on_changing, _var);
+        _var -= rhs;
+        on_change(&on_change, _var);
         return *this;
     }
 
@@ -191,17 +149,9 @@ struct observable
     /// @return Reference to this instance
     constexpr type &operator*=(const T &rhs)
     {
-        if constexpr (notify_previous)
-        {
-            T old_value = _var;
-            _var *= rhs;
-            on_change(&on_change, old_value, _var);
-        }
-        else
-        {
-            _var *= rhs;
-            on_change(&on_change, _var);
-        }
+        on_changing(&on_changing, _var);
+        _var *= rhs;
+        on_change(&on_change, _var);
         return *this;
     }
 
@@ -210,17 +160,9 @@ struct observable
     /// @return Reference to this instance
     constexpr type &operator/=(const T &rhs)
     {
-        if constexpr (notify_previous)
-        {
-            T old_value = _var;
-            _var /= rhs;
-            on_change(&on_change, old_value, _var);
-        }
-        else
-        {
-            _var /= rhs;
-            on_change(&on_change, _var);
-        }
+        on_changing(&on_changing, _var);
+        _var /= rhs;
+        on_change(&on_change, _var);
         return *this;
     }
 
@@ -229,17 +171,9 @@ struct observable
     /// @return Reference to this instance
     constexpr type &operator%=(const T &rhs)
     {
-        if constexpr (notify_previous)
-        {
-            T old_value = _var;
-            _var %= rhs;
-            on_change(&on_change, old_value, _var);
-        }
-        else
-        {
-            _var %= rhs;
-            on_change(&on_change, _var);
-        }
+        on_changing(&on_changing, _var);
+        _var %= rhs;
+        on_change(&on_change, _var);
         return *this;
     }
 
@@ -248,17 +182,9 @@ struct observable
     /// @return Reference to this instance
     constexpr type &operator^=(const T &rhs)
     {
-        if constexpr (notify_previous)
-        {
-            T old_value = _var;
-            _var ^= rhs;
-            on_change(&on_change, old_value, _var);
-        }
-        else
-        {
-            _var ^= rhs;
-            on_change(&on_change, _var);
-        }
+        on_changing(&on_changing, _var);
+        _var ^= rhs;
+        on_change(&on_change, _var);
         return *this;
     }
 
@@ -267,17 +193,9 @@ struct observable
     /// @return Reference to this instance
     constexpr type &operator&=(const T &rhs)
     {
-        if constexpr (notify_previous)
-        {
-            T old_value = _var;
-            _var &= rhs;
-            on_change(&on_change, old_value, _var);
-        }
-        else
-        {
-            _var &= rhs;
-            on_change(&on_change, _var);
-        }
+        on_changing(&on_changing, _var);
+        _var &= rhs;
+        on_change(&on_change, _var);
         return *this;
     }
 
@@ -286,47 +204,89 @@ struct observable
     /// @return Reference to this instance
     constexpr type &operator|=(const T &rhs)
     {
-        if constexpr (notify_previous)
-        {
-            T old_value = _var;
-            _var |= rhs;
-            on_change(&on_change, old_value, _var);
-        }
-        else
-        {
-            _var |= rhs;
-            on_change(&on_change, _var);
-        }
+        on_changing(&on_changing, _var);
+        _var |= rhs;
+        on_change(&on_change, _var);
         return *this;
     }
 
-    /**
-     * @brief Forcedly dispatch the on_change event
-     *
-     * @note Requires the template parameter `notify_previous` set to `false`
-     */
-    void dispatch()
-    {
-        static_assert(
-            !notify_previous,
-            "observable::dispatch() requires a previous value as parameter");
-        if constexpr (!notify_previous)
-            on_change(&on_change, _var);
-    }
+    //.... Backing variable access without a context ....
+    //     Easier but prone to human mistake
+    //     Uncomment if you wish.
+
+    // /// @brief Forcedly dispatch the on_change event
+    // void dispatch()
+    // {
+    //     on_change(&on_change, _var);
+    // }
+
+    // /**
+    //  * @brief Forcedly dispatch the on_changing and on_change events
+    //  *
+    //  * @param old_value Previous value.
+    //  */
+    // void dispatch(const T &old_value)
+    // {
+    //     on_changing(&on_changing, old_value);
+    //     on_change(&on_change, _var);
+    // }
+
+    // T *operator->()
+    // {
+    //     return &_var;
+    // }
+
+    //.... Backing variableaccess via context ....
 
     /**
-     * @brief Forcedly dispatch the on_change event
+     * @brief Context to access the backing variable members
      *
-     * @param old_value Previous value.
-     *                  Ignored if `notify_previous` is `false`.
      */
-    void dispatch(const T &old_value)
+    struct context
     {
-        if constexpr (notify_previous)
-            on_change(&on_change, old_value, _var);
-        else
-            on_change(&on_change, _var);
-    }
+        /// @brief Dispatch on_change
+        virtual ~context()
+        {
+            owner.on_change(&owner.on_change, owner._var);
+        }
+
+        /// @brief Move constructor
+        constexpr context(context &&) noexcept = default;
+
+        /// @brief Deleted copy constructor
+        constexpr context(const context &) noexcept = delete;
+
+        /// @brief Move-assignment
+        constexpr context &operator=(context &&) noexcept = default;
+
+        /// @brief Deleted copy-assignment
+        constexpr context &operator=(const context &) noexcept = delete;
+
+        /// @brief Access to the backing variable
+        /// @return Pointer to the backing variable
+        T *operator->()
+        {
+            return &owner._var;
+        }
+
+    private:
+        friend class observable<T>;
+        /// @brief Context owner type
+        using owner_type = observable<T>;
+        /// @brief Context owner
+        observable<T> &owner;
+
+        /// @brief Private constructor
+        /// @param owner Owner of this context
+        constexpr context(owner_type &owner) : owner{owner}
+        {
+            owner.on_changing(&owner.on_changing, owner._var);
+        }
+    };
+
+    context with() { return context(*this); }
+
+    //.... Public read-only access ....
 
     /**
      * @brief Read-only observable variable for public interfaces
@@ -336,6 +296,9 @@ struct observable
      */
     struct readonly
     {
+        /// @brief Subscribable event to notify about to change values
+        event_type &on_changing;
+
         /// @brief Subscribable event to notify value changes
         event_type &on_change;
 
@@ -348,7 +311,9 @@ struct observable
          * @param writer Observable holding the actual value
          */
         constexpr readonly(type &writer)
-            : on_change{writer.on_change}, _writer{writer} {}
+            : on_changing{writer.on_changing},
+              on_change{writer.on_change},
+              _var{writer._var} {}
 
         /// @brief Copy constructor (default)
         constexpr readonly(const readonly &) noexcept = default;
@@ -360,15 +325,15 @@ struct observable
         constexpr readonly &operator=(readonly &&) noexcept = default;
 
         /// @brief Get the current value
-        constexpr operator T() const noexcept { return _writer._var; }
+        constexpr operator T() const noexcept { return _var; }
 
     private:
-        /// @brief Reference to backing observable
-        type &_writer;
+        /// @brief Reference to the backing variable
+        T &_var;
     };
 
 private:
     friend class readonly;
-    /// @brief Reference to backing variable
-    T &_var;
+    /// @brief Backing variable
+    T _var;
 };
