@@ -47,6 +47,17 @@ struct Mock
     }
 } mock1, mock2;
 
+struct IntDoubleMock
+{
+    int a{};
+    double b{};
+    void member_callback(int a, const double &b)
+    {
+        this->a = a;
+        this->b = b;
+    }
+};
+
 //------------------------------------------------------------------------------
 // Tests
 //------------------------------------------------------------------------------
@@ -185,6 +196,20 @@ void test6()
         assert(source.subscribed() == 0);
         assert(dest.subscribed() == 1);
     }
+}
+
+void test7()
+{
+    // NOTE: mostly a compile-time test
+    // to check template parameter expansion
+    cout << "- member function binding with two template parameters -" << endl;
+    event<int, double> evt;
+    IntDoubleMock x;
+    evt.subscribe(&IntDoubleMock::member_callback, &x);
+    evt.unsubscribe(&IntDoubleMock::member_callback, &x);
+    evt(10, 10.0);
+    assert(x.a == 10);
+    assert(x.b == 10.0);
 }
 
 //------------------------------------------------------------------------------

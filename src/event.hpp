@@ -16,6 +16,8 @@
 #include <functional>
 #include <vector>
 #include <mutex>
+#include <string>
+#include <cstring>
 
 //------------------------------------------------------------------------------
 
@@ -44,10 +46,20 @@ public:
     void subscribe(const callback_type &callback) noexcept
     {
         ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
-        if (callback && (index_of(callback, nullptr) >= _callback.size()))
+        if (callback)
         {
-            _callback.push_back(callback);
-            _callback_holder.push_back(nullptr);
+            const void *tgt = callback.template target<callback_type>();
+            ::std::string key;
+            if (tgt)
+            {
+                key.resize(sizeof(tgt));
+                ::std::memcpy(&key[0], &tgt, sizeof(tgt));
+            }
+            if (index_of_member(key) >= _callback.size())
+            {
+                _callback.push_back(callback);
+                _callback_key.push_back(key);
+            }
         }
     }
 
@@ -76,17 +88,23 @@ public:
      * @param member_function Member function
      * @param obj Holder
      */
-    template <class C>
-    void subscribe(void (C::*member_function)(Args...), C *obj) noexcept
+    template <class C, class MemFn>
+    void subscribe(MemFn member_function, C *obj) noexcept
     {
         if (obj && member_function)
         {
             ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
-            auto callback = (callback_type(::std::bind(member_function, obj)));
-            if (index_of(callback, obj) >= _callback.size())
+            ::std::uintptr_t addr = reinterpret_cast<::std::uintptr_t>(obj);
+            ::std::string key(sizeof(addr) + sizeof(member_function), '\0');
+            ::std::memcpy(&key[0], &addr, sizeof(addr));
+            ::std::memcpy(&key[0 + sizeof(addr)], &member_function, sizeof(member_function));
+            auto callback = callback_type([obj, member_function](Args... args) {
+                ::std::invoke(member_function, obj, args...);
+            });
+            if (index_of_member(key) >= _callback.size())
             {
                 _callback.push_back(callback);
-                _callback_holder.push_back(obj);
+                _callback_key.push_back(key);
             }
         }
     }
@@ -104,11 +122,18 @@ public:
         if (callback)
         {
             ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
-            auto index = index_of(callback, nullptr);
+            const void *tgt = callback.template target<callback_type>();
+            ::std::string key;
+            if (tgt)
+            {
+                key.resize(sizeof(tgt));
+                ::std::memcpy(&key[0], &tgt, sizeof(tgt));
+            }
+            auto index = index_of_member(key);
             if (index < _callback.size())
             {
                 _callback.erase(_callback.begin() + index);
-                _callback_holder.erase(_callback_holder.begin() + index);
+                _callback_key.erase(_callback_key.begin() + index);
             }
         }
     }
@@ -138,18 +163,21 @@ public:
      * @param member_function Member function
      * @param obj Holder
      */
-    template <class C>
-    void unsubscribe(void (C::*member_function)(Args...), C *obj) noexcept
+    template <class C, class MemFn>
+    void unsubscribe(MemFn member_function, C *obj) noexcept
     {
         if (obj && member_function)
         {
             ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
-            auto callback = (callback_type(::std::bind(member_function, obj)));
-            auto index = index_of(callback, obj);
+            ::std::uintptr_t addr = reinterpret_cast<::std::uintptr_t>(obj);
+            ::std::string key(sizeof(addr) + sizeof(member_function), '\0');
+            ::std::memcpy(&key[0], &addr, sizeof(addr));
+            ::std::memcpy(&key[0 + sizeof(addr)], &member_function, sizeof(member_function));
+            auto index = index_of_member(key);
             if (index < _callback.size())
             {
                 _callback.erase(_callback.begin() + index);
-                _callback_holder.erase(_callback_holder.begin() + index);
+                _callback_key.erase(_callback_key.begin() + index);
             }
         }
     }
@@ -163,7 +191,7 @@ public:
     {
         ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
         _callback.clear();
-        _callback_holder.clear();
+        _callback_key.clear();
     }
 
     /**
@@ -175,7 +203,14 @@ public:
      */
     bool is_subscribed(const callback_type &callback)
     {
-        return (index_of(callback, nullptr) < _callback.size());
+        const void *tgt = callback.template target<callback_type>();
+        ::std::string key;
+        if (tgt)
+        {
+            key.resize(sizeof(tgt));
+            ::std::memcpy(&key[0], &tgt, sizeof(tgt));
+        }
+        return (index_of_member(key) < _callback.size());
     }
 
     /**
@@ -187,12 +222,14 @@ public:
      * @return true If subscribed
      * @return false If not subscribed
      */
-    template <class C>
-    bool is_subscribed(void (C::*member_function)(Args...), C *obj)
+    template <class C, class MemFn>
+    bool is_subscribed(MemFn member_function, C *obj)
     {
-        callback_type callback =
-            (callback_type(::std::bind(member_function, obj)));
-        return (index_of(callback, obj) < _callback.size());
+        ::std::uintptr_t addr = reinterpret_cast<::std::uintptr_t>(obj);
+        ::std::string key(sizeof(addr) + sizeof(member_function), '\0');
+        ::std::memcpy(&key[0], &addr, sizeof(addr));
+        ::std::memcpy(&key[0 + sizeof(addr)], &member_function, sizeof(member_function));
+        return (index_of_member(key) < _callback.size());
     }
 
     /**
@@ -237,7 +274,7 @@ public:
     {
         ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
         _callback.swap(source._callback);
-        _callback_holder.swap(source._callback_holder);
+        _callback_key.swap(source._callback_key);
         return *this;
     }
 
@@ -251,7 +288,7 @@ public:
     {
         ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
         _callback = source._callback;
-        _callback_holder = _callback_holder;
+        _callback_key = source._callback_key;
         return *this;
     }
 
@@ -268,7 +305,7 @@ public:
      */
     event(const type &source)
         : _callback{source._callback},
-          _callback_holder{source._callback_holder},
+          _callback_key{source._callback_key},
           subscribe_mutex{} {}
 
     /**
@@ -279,14 +316,14 @@ public:
     event(type &&source) : subscribe_mutex{}
     {
         _callback.swap(source._callback);
-        _callback_holder.swap(source._callback_holder);
+        _callback_key.swap(source._callback_key);
     }
 
 private:
     /// @brief List of subscribed callbacks
     ::std::vector<callback_type> _callback{};
-    /// @brief List of callback holders (in the case of a member function)
-    ::std::vector<void *> _callback_holder{};
+    /// @brief Key bytes to identify subscription (object address + member/function bytes)
+    ::std::vector<::std::string> _callback_key{};
     /// @brief Mutex for callback subscription
     mutable ::std::mutex subscribe_mutex{};
 
@@ -297,14 +334,11 @@ private:
      * @param obj Callback holder or nullptr
      * @return ::std::size_t Index. If not found, index==_callback.size()
      */
-    ::std::size_t index_of(const callback_type &cb, void *obj)
-        const noexcept
+    ::std::size_t index_of_member(const ::std::string &key) const noexcept
     {
         ::std::size_t index;
         for (index = 0; index < _callback.size(); index++)
-            if ((_callback_holder[index] == obj) &&
-                (_callback[index].template target<callback_type>() ==
-                 cb.template target<callback_type>()))
+            if (_callback_key[index] == key)
                 break;
         return index;
     }
