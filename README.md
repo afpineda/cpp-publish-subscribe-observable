@@ -32,9 +32,8 @@ For instance:
 event<int,const std::string &> on_message;
 ```
 
-Subscribe and unsubscribe using the `+=` and `-=` operators
-or the `subscribe()` and `unsubscribe()` methods
-(all of them are thread-safe).
+Subscribe and unsubscribe using the `subscribe()` and `unsubscribe()` methods
+(thread-safe).
 Many callbacks can subscribe to the same event.
 
 For instance:
@@ -50,8 +49,8 @@ void debug_log(int id, const std::string &text)
     ...
 }
 ...
-on_message += on_message_callback;
-on_message += debug_log;
+on_message.subscribe(on_message_callback);
+on_message.subscribe(debug_log);
 ```
 
 Events are dispatched using the function call operator. For instance:
@@ -62,12 +61,43 @@ on_message(27,"test message");
 
 All subscribed callbacks (if any) will be executed in subscription order.
 
+> **ℹ️Note**:
+>
+> if a callback is subscribed twice, it will be called twice on dispatch.
+
+To unsubscribe, you must keep the handler returned by `subscribe()`.
+For instance:
+
+```c++
+auto subscription = on_message.subscribe(on_message_callback);
+...
+on_message.unsubscribe(subscription);
+```
+
+To declare a subscription handler for later use (example):
+
+```c++
+event<int>::subscription_handler subscription1;
+event<>::subscription_handler subscription2;
+```
+
+To check subscription status (example):
+
+```c++
+event<int>::subscription_handler subscription1;
+...
+if (subscription1.is_subscribed()) {
+  ...
+}
+```
+
 ### Member function callbacks
 
-**Do not** use `std::bind()` to subscribe member functions.
-**It does not work**.
-Use the provided `subscribe()` and `unsubscribe()` methods that take the
-same arguments as `std::bind()`. For instance:
+You can subscribe member functions using
+[std::bind()](https://en.cppreference.com/w/cpp/utility/functional/bind.html)
+but, for better legibility,
+use the overloaded `subscribe()` that takes the same arguments.
+For instance:
 
 ```c++
 struct MyClass

@@ -18,11 +18,14 @@
 #include <mutex>
 #include <string>
 #include <cstring>
+#include <cstdint>
+
+//------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------
 
 /**
- * @brief Publish-subscribe event
+ * @brief Publish-subscribe event with subscription handles
  *
  * @tparam Args Callback argument types
  */
@@ -36,150 +39,137 @@ public:
     using callback_type = typename ::std::function<void(Args...)>;
 
     /**
-     * @brief Subscribe
+     * @brief Subscription handle for managing callback lifetimes
+     *
+     * @note Provides O(1) unsubscribe via generational index
+     * @note Invalid after callback is unsubscribed
+     */
+    class subscription_handler
+    {
+        friend class event<Args...>;
+        /// @brief Index in subscription array
+        ::std::size_t index = 0;
+        /// @brief Generation number to prevent ABA problem
+        ::std::uint32_t generation = 0;
+        /// @brief Pointer to owning event instance
+        void *owner = nullptr;
+        /// @brief Subscription status
+        bool subscribed = false;
+
+        /**
+         * @brief Check if handle is valid (generation > 0 and owner != nullptr)
+         * @return true if handle may be valid
+         * @return false if handle is definitely invalid
+         */
+        bool is_valid() const noexcept
+        {
+            return generation > 0 && owner != nullptr;
+        }
+
+    public:
+        constexpr bool is_subscribed() const noexcept { return subscribed; }
+    };
+
+    /**
+     * @brief Subscribe a callback function
      *
      * @note Thread-safe
-     * @note Subscribing twice hass no effect
      *
      * @param callback Callback function to be called on event dispatch
+     * @return subscription_handler Handler required to unsubscribe
      */
-    void subscribe(const callback_type &callback) noexcept
+    subscription_handler subscribe(const callback_type &callback) noexcept
     {
         ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
-        if (callback)
+
+        if (!callback)
+            return {};
+
+        // Compute key for callback identity
+        const void *tgt = callback.template target<callback_type>();
+        ::std::string key;
+        if (tgt)
         {
-            const void *tgt = callback.template target<callback_type>();
-            ::std::string key;
-            if (tgt)
-            {
-                key.resize(sizeof(tgt));
-                ::std::memcpy(&key[0], &tgt, sizeof(tgt));
-            }
-            if (index_of_member(key) >= _callback.size())
-            {
-                _callback.push_back(callback);
-                _callback_key.push_back(key);
-            }
+            key.resize(sizeof(tgt));
+            ::std::memcpy(&key[0], &tgt, sizeof(tgt));
         }
+
+        // Allocate slot
+        subscription_handler result;
+        result.owner = static_cast<void *>(this);
+        result.subscribed = true;
+
+        if (!_free_list.empty())
+        {
+            result.index = _free_list.back();
+            _free_list.pop_back();
+            result.generation = _subscriptions[result.index].generation + 1;
+        }
+        else
+        {
+            result.index = _subscriptions.size();
+            result.generation = 1;
+        }
+
+        // Store subscription
+        if (result.index >= _subscriptions.size())
+            _subscriptions.resize(result.index + 1);
+
+        _subscriptions[result.index] = {callback, key, result.generation, true};
+
+        return result;
     }
 
     /**
-     * @brief Subscribe
+     * @brief Subscribe a member function
      *
      * @note Thread-safe
-     * @note Subscribing twice hass no effect
-     *
-     * @param callback Callback function to be called on event dispatch
-     * @return type& Reference to this instance
-     */
-    type &operator+=(const callback_type &callback) noexcept
-    {
-        subscribe(callback);
-        return *this;
-    }
-
-    /**
-     * @brief Subscribe member function
-     *
-     * @note Thread-safe
-     * @note Subscribing twice hass no effect
      *
      * @tparam C Holder class
+     * @tparam MemFn Member function pointer type
      * @param member_function Member function
-     * @param obj Holder
+     * @param obj Holder instance
+     * @return subscription_handler Handler required to unsubscribe
      */
     template <class C, class MemFn>
-    void subscribe(MemFn member_function, C *obj) noexcept
+    subscription_handler subscribe(MemFn member_function, C *obj) noexcept
     {
-        if (obj && member_function)
-        {
-            ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
-            ::std::uintptr_t addr = reinterpret_cast<::std::uintptr_t>(obj);
-            ::std::string key(sizeof(addr) + sizeof(member_function), '\0');
-            ::std::memcpy(&key[0], &addr, sizeof(addr));
-            ::std::memcpy(&key[0 + sizeof(addr)], &member_function, sizeof(member_function));
-            auto callback = callback_type([obj, member_function](Args... args) {
-                ::std::invoke(member_function, obj, args...);
-            });
-            if (index_of_member(key) >= _callback.size())
-            {
-                _callback.push_back(callback);
-                _callback_key.push_back(key);
-            }
-        }
+        return subscribe(::std::bind(member_function,obj));
     }
 
     /**
      * @brief Unsubscribe
      *
      * @note Thread-safe
-     * @note No effect if not subscribed
+     * @note No effect if @p h is invalid or already unsubscribed
      *
-     * @param callback Callback function previously subscribed
+     * @param h Subscription handler returned by subscribe()
      */
-    void unsubscribe(const callback_type &callback) noexcept
+    void unsubscribe(subscription_handler &h) noexcept
     {
-        if (callback)
-        {
-            ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
-            const void *tgt = callback.template target<callback_type>();
-            ::std::string key;
-            if (tgt)
-            {
-                key.resize(sizeof(tgt));
-                ::std::memcpy(&key[0], &tgt, sizeof(tgt));
-            }
-            auto index = index_of_member(key);
-            if (index < _callback.size())
-            {
-                _callback.erase(_callback.begin() + index);
-                _callback_key.erase(_callback_key.begin() + index);
-            }
-        }
-    }
+        if (!h.is_valid())
+            return;
 
-    /**
-     * @brief Unsubscribe
-     *
-     * @note Thread-safe
-     * @note No effect if not subscribed
-     *
-     * @param callback Callback function previously subscribed
-     * @return type& Reference to this instance
-     */
-    type &operator-=(const callback_type &callback) noexcept
-    {
-        unsubscribe(callback);
-        return *this;
-    }
+        // Verify handle belongs to this instance
+        if (h.owner != static_cast<const void *>(this))
+            return; // Handle from different event instance, no-op
 
-    /**
-     * @brief Unsubscribe member function
-     *
-     * @note Thread-safe
-     * @note No effect if not subscribed
-     *
-     * @tparam C Holder class
-     * @param member_function Member function
-     * @param obj Holder
-     */
-    template <class C, class MemFn>
-    void unsubscribe(MemFn member_function, C *obj) noexcept
-    {
-        if (obj && member_function)
+        ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
+
+        // Verify handle validity
+        if (h.index >= _subscriptions.size() ||
+            _subscriptions[h.index].generation != h.generation)
         {
-            ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
-            ::std::uintptr_t addr = reinterpret_cast<::std::uintptr_t>(obj);
-            ::std::string key(sizeof(addr) + sizeof(member_function), '\0');
-            ::std::memcpy(&key[0], &addr, sizeof(addr));
-            ::std::memcpy(&key[0 + sizeof(addr)], &member_function, sizeof(member_function));
-            auto index = index_of_member(key);
-            if (index < _callback.size())
-            {
-                _callback.erase(_callback.begin() + index);
-                _callback_key.erase(_callback_key.begin() + index);
-            }
+            return; // Handle is stale, no-op
         }
+
+        // Mark slot as free
+        _subscriptions[h.index].active = false;
+        _subscriptions[h.index].generation++;
+        _free_list.push_back(h.index);
+
+        // Mark handle as not subscribed
+        h.subscribed = false;
     }
 
     /**
@@ -190,68 +180,36 @@ public:
     void clear() noexcept
     {
         ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
-        _callback.clear();
-        _callback_key.clear();
+        _subscriptions.clear();
+        _free_list.clear();
     }
 
     /**
-     * @brief Check subscription
-     *
-     * @param callback Callback
-     * @return true If subscribed
-     * @return false If not subscribed
-     */
-    bool is_subscribed(const callback_type &callback)
-    {
-        const void *tgt = callback.template target<callback_type>();
-        ::std::string key;
-        if (tgt)
-        {
-            key.resize(sizeof(tgt));
-            ::std::memcpy(&key[0], &tgt, sizeof(tgt));
-        }
-        return (index_of_member(key) < _callback.size());
-    }
-
-    /**
-     * @brief Check subscription of member function
-     *
-     * @tparam C Holder class
-     * @param member_function Member function
-     * @param obj Holder instance
-     * @return true If subscribed
-     * @return false If not subscribed
-     */
-    template <class C, class MemFn>
-    bool is_subscribed(MemFn member_function, C *obj)
-    {
-        ::std::uintptr_t addr = reinterpret_cast<::std::uintptr_t>(obj);
-        ::std::string key(sizeof(addr) + sizeof(member_function), '\0');
-        ::std::memcpy(&key[0], &addr, sizeof(addr));
-        ::std::memcpy(&key[0 + sizeof(addr)], &member_function, sizeof(member_function));
-        return (index_of_member(key) < _callback.size());
-    }
-
-    /**
-     * @brief Dispatch event
+     * @brief Dispatch event to all subscribed callbacks
      *
      * @param args Event data
      */
     void operator()(const Args &...args)
     {
-        for (auto cb : _callback)
-            cb(args...);
+        for (const auto &entry : _subscriptions)
+        {
+            if (entry.active)
+                entry.callback(args...);
+        }
     }
 
     /**
-     * @brief Dispatch event
+     * @brief Dispatch event to all subscribed callbacks (const)
      *
      * @param args Event data
      */
     void operator()(const Args &...args) const
     {
-        for (auto cb : _callback)
-            cb(args...);
+        for (const auto &entry : _subscriptions)
+        {
+            if (entry.active)
+                entry.callback(args...);
+        }
     }
 
     /**
@@ -261,7 +219,13 @@ public:
      */
     ::std::size_t subscribed()
     {
-        return _callback.size();
+        ::std::size_t count = 0;
+        for (const auto &entry : _subscriptions)
+        {
+            if (entry.active)
+                count++;
+        }
+        return count;
     }
 
     /**
@@ -273,8 +237,8 @@ public:
     type &operator=(type &&source) noexcept
     {
         ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
-        _callback.swap(source._callback);
-        _callback_key.swap(source._callback_key);
+        _subscriptions.swap(source._subscriptions);
+        _free_list.swap(source._free_list);
         return *this;
     }
 
@@ -287,8 +251,8 @@ public:
     type &operator=(const type &source) noexcept
     {
         ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
-        _callback = source._callback;
-        _callback_key = source._callback_key;
+        _subscriptions = source._subscriptions;
+        _free_list = source._free_list;
         return *this;
     }
 
@@ -304,8 +268,8 @@ public:
      * @param source Instance to be copied
      */
     event(const type &source)
-        : _callback{source._callback},
-          _callback_key{source._callback_key},
+        : _subscriptions{source._subscriptions},
+          _free_list{source._free_list},
           subscribe_mutex{} {}
 
     /**
@@ -315,33 +279,26 @@ public:
      */
     event(type &&source) : subscribe_mutex{}
     {
-        _callback.swap(source._callback);
-        _callback_key.swap(source._callback_key);
+        _subscriptions.swap(source._subscriptions);
+        _free_list.swap(source._free_list);
     }
 
 private:
-    /// @brief List of subscribed callbacks
-    ::std::vector<callback_type> _callback{};
-    /// @brief Key bytes to identify subscription (object address + member/function bytes)
-    ::std::vector<::std::string> _callback_key{};
-    /// @brief Mutex for callback subscription
-    mutable ::std::mutex subscribe_mutex{};
-
-    /**
-     * @brief Get the index of a callback
-     *
-     * @param cb Callback
-     * @param obj Callback holder or nullptr
-     * @return ::std::size_t Index. If not found, index==_callback.size()
-     */
-    ::std::size_t index_of_member(const ::std::string &key) const noexcept
+    /// @brief Subscription entry with callback, key, and generation
+    struct subscription_entry
     {
-        ::std::size_t index;
-        for (index = 0; index < _callback.size(); index++)
-            if (_callback_key[index] == key)
-                break;
-        return index;
-    }
+        callback_type callback;
+        ::std::string key;
+        ::std::uint32_t generation = 0;
+        bool active = false;
+    };
+
+    /// @brief List of subscription entries
+    ::std::vector<subscription_entry> _subscriptions{};
+    /// @brief List of free slot indices for reuse
+    ::std::vector<::std::size_t> _free_list{};
+    /// @brief Mutex for thread-safe operations
+    mutable ::std::mutex subscribe_mutex{};
 };
 
 //------------------------------------------------------------------------------
