@@ -216,7 +216,7 @@ property2.on_change += callback;
 The *callback signature* is:
 
 ```c++
-void callback(void *event, T value)
+void callback(void *event, const T &value)
 ```
 
 Where:
