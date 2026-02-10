@@ -24,6 +24,7 @@ on:
       - 'main'
     paths:
       - 'src/**'
+      - 'README.md'
   workflow_dispatch:
 
 jobs:

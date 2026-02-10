@@ -193,7 +193,7 @@ and do not have access to the backing variable.
 
 ```c++
 std::cout << "Initial value: " << instance2.property << std::endl;
-// instance.property = 3; <-- Compiler error
+// instance2.property = 3; <-- Compiler error
 instance2.setter(3); // the on_change event is dispatched here
 ```
 
@@ -221,11 +221,11 @@ void callback(void *event, const T &value)
 
 Where:
 
-- `T` is the first template parameter and the type of the backing variable.
+- `T` is the template parameter and the type of the backing variable.
 
 - `event` is a pointer to the `on_change` or `on_changing` event.
   If you need to, use this parameter to know
-  which instance dispatched the event. For instance:
+  which instance dispatched which event. For instance:
 
   ```c++
     ...
@@ -233,8 +233,7 @@ Where:
       ...
     } else if (event==&certain_object.property.on_changing) {
       ...
-    }
-    ...
+    } else if (event==&another_object.property.on_change) ...
   ```
 
 - `value` in the `on_changing` event is the value about to change.
