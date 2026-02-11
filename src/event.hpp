@@ -16,16 +16,17 @@
 #include <functional>
 #include <vector>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <cstring>
 #include <cstdint>
 
 //------------------------------------------------------------------------------
 
-//------------------------------------------------------------------------------
-
 /**
- * @brief Publish-subscribe event with subscription handles
+ * @brief Publish-subscribe event
+ *
+ * @note Thread-safe
  *
  * @tparam Args Callback argument types
  */
@@ -73,14 +74,12 @@ public:
     /**
      * @brief Subscribe a callback function
      *
-     * @note Thread-safe
-     *
      * @param callback Callback function to be called on event dispatch
      * @return subscription_handler Handler required to unsubscribe
      */
     subscription_handler subscribe(const callback_type &callback) noexcept
     {
-        ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
+        ::std::unique_lock<::std::shared_mutex> guard(subscribe_mutex);
 
         if (!callback)
             return {};
@@ -123,8 +122,6 @@ public:
     /**
      * @brief Subscribe a member function
      *
-     * @note Thread-safe
-     *
      * @tparam C Holder class
      * @tparam MemFn Member function pointer type
      * @param member_function Member function
@@ -135,7 +132,8 @@ public:
     subscription_handler subscribe(MemFn member_function, C *obj) noexcept
     {
         // Create callback wrapper from member function and object
-        callback_type callback = [member_function, obj](Args... args) {
+        callback_type callback = [member_function, obj](Args... args)
+        {
             (obj->*member_function)(args...);
         };
         return subscribe(callback);
@@ -144,7 +142,6 @@ public:
     /**
      * @brief Unsubscribe
      *
-     * @note Thread-safe
      * @note No effect if @p h is invalid or already unsubscribed
      *
      * @param h Subscription handler returned by subscribe()
@@ -158,7 +155,7 @@ public:
         if (h.owner != static_cast<const void *>(this))
             return; // Handle from different event instance, no-op
 
-        ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
+        ::std::unique_lock<::std::shared_mutex> guard(subscribe_mutex);
 
         // Verify handle validity
         if (h.index >= _subscriptions.size() ||
@@ -179,11 +176,11 @@ public:
     /**
      * @brief Clear all subscriptions
      *
-     * @warning To be used exclusively in test units. Thread-safe.
+     * @warning To be used exclusively in test units.
      */
     void clear() noexcept
     {
-        ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
+        ::std::unique_lock<::std::shared_mutex> guard(subscribe_mutex);
         _subscriptions.clear();
         _free_list.clear();
     }
@@ -195,6 +192,7 @@ public:
      */
     void operator()(const Args &...args)
     {
+        ::std::shared_lock<::std::shared_mutex> guard(subscribe_mutex);
         for (const auto &entry : _subscriptions)
         {
             if (entry.active)
@@ -209,6 +207,7 @@ public:
      */
     void operator()(const Args &...args) const
     {
+        ::std::shared_lock<::std::shared_mutex> guard(subscribe_mutex);
         for (const auto &entry : _subscriptions)
         {
             if (entry.active)
@@ -223,6 +222,7 @@ public:
      */
     ::std::size_t subscribed()
     {
+        ::std::shared_lock<::std::shared_mutex> guard(subscribe_mutex);
         ::std::size_t count = 0;
         for (const auto &entry : _subscriptions)
         {
@@ -240,7 +240,8 @@ public:
      */
     type &operator=(type &&source) noexcept
     {
-        ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
+        ::std::unique_lock<::std::shared_mutex> guard1(subscribe_mutex);
+        ::std::unique_lock<::std::shared_mutex> guard2(source.subscribe_mutex);
         _subscriptions.swap(source._subscriptions);
         _free_list.swap(source._free_list);
         return *this;
@@ -254,7 +255,8 @@ public:
      */
     type &operator=(const type &source) noexcept
     {
-        ::std::lock_guard<::std::mutex> guard(subscribe_mutex);
+        ::std::unique_lock<::std::shared_mutex> guard1(subscribe_mutex);
+        ::std::shared_lock<::std::shared_mutex> guard2(source.subscribe_mutex);
         _subscriptions = source._subscriptions;
         _free_list = source._free_list;
         return *this;
@@ -272,17 +274,20 @@ public:
      * @param source Instance to be copied
      */
     event(const type &source)
-        : _subscriptions{source._subscriptions},
-          _free_list{source._free_list},
-          subscribe_mutex{} {}
+    {
+        ::std::shared_lock<::std::shared_mutex> guard2(source.subscribe_mutex);
+        _subscriptions = source._subscriptions;
+        _free_list = source._free_list;
+    }
 
     /**
      * @brief Move constructor
      *
      * @param source Rvalue
      */
-    event(type &&source) : subscribe_mutex{}
+    event(type &&source)
     {
+        ::std::unique_lock<::std::shared_mutex> guard(source.subscribe_mutex);
         _subscriptions.swap(source._subscriptions);
         _free_list.swap(source._free_list);
     }
@@ -302,7 +307,7 @@ private:
     /// @brief List of free slot indices for reuse
     ::std::vector<::std::size_t> _free_list{};
     /// @brief Mutex for thread-safe operations
-    mutable ::std::mutex subscribe_mutex{};
+    mutable ::std::shared_mutex subscribe_mutex{};
 };
 
 //------------------------------------------------------------------------------
