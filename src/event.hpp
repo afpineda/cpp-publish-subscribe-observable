@@ -14,7 +14,7 @@
 //------------------------------------------------------------------------------
 
 #include <functional>
-#include <vector>
+#include <deque>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
@@ -42,33 +42,50 @@ public:
     /**
      * @brief Subscription handler for managing callback lifetimes
      *
-     * @note Provides O(1) unsubscribe via generational index
      * @note Invalid after callback is unsubscribed
      */
     class subscription_handler
     {
         friend class event<Args...>;
-        /// @brief Index in subscription array
-        ::std::size_t index = 0;
-        /// @brief Generation number to prevent ABA problem
-        ::std::uint32_t generation = 0;
         /// @brief Pointer to owning event instance
-        void *owner = nullptr;
-        /// @brief Subscription status
-        bool subscribed = false;
+        void *owner{nullptr};
+        /// @brief Subscription id
+        ::std::size_t id{0};
 
         /**
-         * @brief Check if handle is valid (generation > 0 and owner != nullptr)
-         * @return true if handle may be valid
-         * @return false if handle is definitely invalid
+         * @brief Private constructor
+         * @param owner Owning event instance
+         * @param id Subscription id
          */
-        bool is_valid() const noexcept
-        {
-            return generation > 0 && owner != nullptr;
-        }
+        constexpr subscription_handler(void *owner, ::std::size_t id) noexcept
+            : owner{owner}, id{id} {}
 
     public:
-        constexpr bool is_subscribed() const noexcept { return subscribed; }
+        /**
+         * @brief Check if subscribed
+         *
+         * @return true if subscribed
+         * @return false otherwise
+         */
+        constexpr bool is_subscribed() const noexcept
+        {
+            return (owner != nullptr);
+        }
+
+        /// @brief Default constructor
+        constexpr subscription_handler() noexcept = default;
+        /// @brief Move constructor (default)
+        constexpr subscription_handler(
+            subscription_handler &&) noexcept = default;
+        /// @brief Copy constructor (deleted)
+        constexpr subscription_handler(
+            const subscription_handler &) noexcept = delete;
+        /// @brief Move-assignment (default)
+        constexpr subscription_handler &operator=(
+            subscription_handler &&) noexcept = default;
+        /// @brief Copy-assignment (deleted)
+        constexpr subscription_handler &operator=(
+            const subscription_handler &) noexcept = delete;
     };
 
     /**
@@ -79,44 +96,17 @@ public:
      */
     subscription_handler subscribe(const callback_type &callback) noexcept
     {
-        ::std::unique_lock<::std::shared_mutex> guard(subscribe_mutex);
-
         if (!callback)
-            return {};
+            return subscription_handler();
 
-        // Compute key for callback identity
-        const void *tgt = callback.template target<callback_type>();
-        ::std::string key;
-        if (tgt)
-        {
-            key.resize(sizeof(tgt));
-            ::std::memcpy(&key[0], &tgt, sizeof(tgt));
-        }
+        ::std::unique_lock<::std::shared_mutex> guard(subscribe_mutex);
+        _subscriptions.push_back(
+            {
+                .callback = callback,
+                .id = next_id,
+            });
 
-        // Allocate slot
-        subscription_handler result;
-        result.owner = static_cast<void *>(this);
-        result.subscribed = true;
-
-        if (!_free_list.empty())
-        {
-            result.index = _free_list.back();
-            _free_list.pop_back();
-            result.generation = _subscriptions[result.index].generation + 1;
-        }
-        else
-        {
-            result.index = _subscriptions.size();
-            result.generation = 1;
-        }
-
-        // Store subscription
-        if (result.index >= _subscriptions.size())
-            _subscriptions.resize(result.index + 1);
-
-        _subscriptions[result.index] = {callback, key, result.generation, true};
-
-        return result;
+        return subscription_handler(this, next_id++);
     }
 
     /**
@@ -148,29 +138,19 @@ public:
      */
     void unsubscribe(subscription_handler &h) noexcept
     {
-        if (!h.is_valid())
+        if (h.owner != this)
             return;
 
-        // Verify handle belongs to this instance
-        if (h.owner != static_cast<const void *>(this))
-            return; // Handle from different event instance, no-op
-
         ::std::unique_lock<::std::shared_mutex> guard(subscribe_mutex);
-
-        // Verify handle validity
-        if (h.index >= _subscriptions.size() ||
-            _subscriptions[h.index].generation != h.generation)
-        {
-            return; // Handle is stale, no-op
-        }
-
-        // Mark slot as free
-        _subscriptions[h.index].active = false;
-        _subscriptions[h.index].generation++;
-        _free_list.push_back(h.index);
-
-        // Mark handle as not subscribed
-        h.subscribed = false;
+        for (auto entry = _subscriptions.begin();
+             entry != _subscriptions.end();
+             ++entry)
+            if (entry->id == h.id)
+            {
+                _subscriptions.erase(entry);
+                break;
+            }
+        h.owner = nullptr;
     }
 
     /**
@@ -182,7 +162,6 @@ public:
     {
         ::std::unique_lock<::std::shared_mutex> guard(subscribe_mutex);
         _subscriptions.clear();
-        _free_list.clear();
     }
 
     /**
@@ -194,10 +173,7 @@ public:
     {
         ::std::shared_lock<::std::shared_mutex> guard(subscribe_mutex);
         for (const auto &entry : _subscriptions)
-        {
-            if (entry.active)
-                entry.callback(args...);
-        }
+            entry.callback(args...);
     }
 
     /**
@@ -209,10 +185,7 @@ public:
     {
         ::std::shared_lock<::std::shared_mutex> guard(subscribe_mutex);
         for (const auto &entry : _subscriptions)
-        {
-            if (entry.active)
-                entry.callback(args...);
-        }
+            entry.callback(args...);
     }
 
     /**
@@ -222,14 +195,7 @@ public:
      */
     ::std::size_t subscribed()
     {
-        ::std::shared_lock<::std::shared_mutex> guard(subscribe_mutex);
-        ::std::size_t count = 0;
-        for (const auto &entry : _subscriptions)
-        {
-            if (entry.active)
-                count++;
-        }
-        return count;
+        return _subscriptions.size();
     }
 
     /**
@@ -243,7 +209,6 @@ public:
         ::std::unique_lock<::std::shared_mutex> guard1(subscribe_mutex);
         ::std::unique_lock<::std::shared_mutex> guard2(source.subscribe_mutex);
         _subscriptions.swap(source._subscriptions);
-        _free_list.swap(source._free_list);
         return *this;
     }
 
@@ -258,7 +223,6 @@ public:
         ::std::unique_lock<::std::shared_mutex> guard1(subscribe_mutex);
         ::std::shared_lock<::std::shared_mutex> guard2(source.subscribe_mutex);
         _subscriptions = source._subscriptions;
-        _free_list = source._free_list;
         return *this;
     }
 
@@ -277,7 +241,6 @@ public:
     {
         ::std::shared_lock<::std::shared_mutex> guard2(source.subscribe_mutex);
         _subscriptions = source._subscriptions;
-        _free_list = source._free_list;
     }
 
     /**
@@ -289,23 +252,22 @@ public:
     {
         ::std::unique_lock<::std::shared_mutex> guard(source.subscribe_mutex);
         _subscriptions.swap(source._subscriptions);
-        _free_list.swap(source._free_list);
     }
 
 private:
-    /// @brief Subscription entry with callback, key, and generation
+    /// @brief Subscription entry
     struct subscription_entry
     {
+        /// @brief Callback
         callback_type callback;
-        ::std::string key;
-        ::std::uint32_t generation = 0;
-        bool active = false;
+        /// @brief Subscription id
+        ::std::size_t id;
     };
 
     /// @brief List of subscription entries
-    ::std::vector<subscription_entry> _subscriptions{};
-    /// @brief List of free slot indices for reuse
-    ::std::vector<::std::size_t> _free_list{};
+    ::std::deque<subscription_entry> _subscriptions{};
+    /// @brief Next subscription id
+    ::std::size_t next_id{0};
     /// @brief Mutex for thread-safe operations
     mutable ::std::shared_mutex subscribe_mutex{};
 };

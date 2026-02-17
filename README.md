@@ -94,10 +94,8 @@ if (subscription1.is_subscribed()) {
 ### Member function callbacks
 
 You can subscribe member functions using
-[std::bind()](https://en.cppreference.com/w/cpp/utility/functional/bind.html)
-but, for better legibility,
-use the overloaded `subscribe()` that takes the same arguments.
-For instance:
+[std::bind()](https://en.cppreference.com/w/cpp/utility/functional/bind.html).
+For example:
 
 ```c++
 struct MyClass
@@ -109,6 +107,15 @@ struct MyClass
 } instance1,instance2;
 ...
 event<int,const std::string &> on_message;
+on_message.subscribe(::std::bind(&MyClass:on_message_callback, &instance1));
+on_message.subscribe(::std::bind(&MyClass:on_message_callback, &instance2));
+```
+
+but, for better legibility,
+you may use the overloaded `subscribe()` that takes the same arguments.
+For instance:
+
+```c++
 on_message.subscribe(&MyClass:on_message_callback, &instance1);
 on_message.subscribe(&MyClass:on_message_callback, &instance2);
 ```
