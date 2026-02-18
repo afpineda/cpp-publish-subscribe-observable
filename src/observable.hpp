@@ -262,9 +262,16 @@ struct observable
 
         /// @brief Access to the backing variable
         /// @return Pointer to the backing variable
-        T *operator->()
+        T *operator->() const
         {
-            return &owner._var;
+            return ::std::addressof(owner._var);
+        }
+
+        /// @brief Access to the backing variable
+        /// @return Reference to the backing variable
+        T &operator*() const
+        {
+            return owner._var;
         }
 
     private:
@@ -288,7 +295,10 @@ struct observable
      * @return context Access context
      */
     [[nodiscard]]
-    context with() { return context(*this); }
+    context with()
+    {
+        return context(*this);
+    }
 
     //.... Public read-only access ....
 

@@ -199,6 +199,13 @@ void test6()
     }
     itemMock1.expected = 20;
     assert(itemMock1.check());
+
+    {
+        auto ctx = var.with();
+        (*ctx).value = 30;
+    }
+    itemMock1.expected = 30;
+    assert(itemMock1.check());
 }
 
 void test7()
