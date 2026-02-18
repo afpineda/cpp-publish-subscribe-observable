@@ -130,6 +130,22 @@ public:
     }
 
     /**
+     * @brief Subscribe forever
+     *
+     * @warning @p callback must exceed the lifetime of this instance
+     *
+     * @note Use subscribe() instead if you need to unsubscribe later
+     *
+     * @param callback Callback function to be called on event dispatch
+     * @return type& This instance
+     */
+    type &operator+=(const callback_type &callback) noexcept
+    {
+        subscribe(callback);
+        return *this;
+    }
+
+    /**
      * @brief Unsubscribe
      *
      * @note No effect if @p h is invalid or already unsubscribed
@@ -151,6 +167,21 @@ public:
                 break;
             }
         h.owner = nullptr;
+    }
+
+    /**
+     * @brief Unsubscribe
+     *
+     * @note No effect if @p h is invalid or already unsubscribed
+     * @note An alias for unsubscribe()
+     *
+     * @param h Subscription handler returned by subscribe()
+     * @return type& This instance
+     */
+    type &operator-=(subscription_handler &h) noexcept
+    {
+        unsubscribe(h);
+        return *this;
     }
 
     /**

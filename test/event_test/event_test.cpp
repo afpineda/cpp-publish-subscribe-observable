@@ -322,6 +322,25 @@ void test10()
     assert(!sh2.is_subscribed());
 }
 
+void test11()
+{
+    // Note: mostly a compile-time test as +=() and -=() are aliases
+    cout << "- Operators +=() and -=() -" << endl;
+    event evt;
+    mock1.clear();
+    mock2.clear();
+
+    evt += ::std::bind(&Mock::member_callback, &mock1);
+    auto sh1 = evt.subscribe(&Mock::member_callback, &mock2);
+
+    evt();
+    assert(mock1.executed);
+    assert(mock2.executed);
+
+    evt -= sh1;
+    assert(!sh1.is_subscribed());
+}
+
 //------------------------------------------------------------------------------
 // Main
 //------------------------------------------------------------------------------
@@ -338,5 +357,6 @@ int main()
     test8();
     test9();
     test10();
+    test11();
     return 0;
 }

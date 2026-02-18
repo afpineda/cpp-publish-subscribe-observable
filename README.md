@@ -74,7 +74,14 @@ auto subscription = on_message.subscribe(on_message_callback);
 on_message.unsubscribe(subscription);
 ```
 
-To declare a subscription handler for later use (example):
+or (syntactic sugar):
+
+```c++
+...
+on_message -= subscription;
+```
+
+To declare a subscription handler for later use (examples):
 
 ```c++
 event<int>::subscription_handler subscription1;
@@ -89,6 +96,12 @@ event<int>::subscription_handler subscription1;
 if (subscription1.is_subscribed()) {
   ...
 }
+```
+
+To subscribe **forever** there is a handy `+=` operator (example):
+
+```c++
+on_message += on_message_callback; // More syntactic sugar
 ```
 
 ### Member function callbacks
@@ -280,7 +293,7 @@ To continue with the example:
 ```
 
 Please, stick to the RAII idiom. The lifetime of the `observable::context`
-instance must not supersede the lifetime of the corresponding `observable`.
+instance must not live beyond the lifetime of the corresponding `observable`.
 
 ### Additional notes
 
