@@ -38,10 +38,9 @@ public:
     using callback_type = typename ::std::add_pointer<void(Args...)>::type;
 
     /**
-     * @brief Subscribe a callback function
+     * @brief Subscribe forever
      *
      * @param callback Callback function to be called on event dispatch
-     * @return subscription_handler Handler required to unsubscribe
      */
     void subscribe(callback_type callback) noexcept
     {
