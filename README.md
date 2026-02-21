@@ -139,6 +139,24 @@ Treat subscription as resource allocation and apply the
 [RAII idiom](https://en.wikipedia.org/wiki/Resource_acquisition_is_initialization).
 Subscribed callbacks **must** unsubscribe before they get deallocated.
 
+### *Static* events
+
+The `static_event` class template is optimized for the following use case:
+
+- Callbacks are subscribed forever.
+- Callbacks are just functions:
+  not member functions, lambdas or callable objects.
+
+An `initializer_list` constructor is available to remove verbosity in
+subscriptions, for instance:
+
+```c++
+void callback1(int n) { ... }
+void callback2(int n) { ... }
+...
+static_event<int> static_event_example({callback1, callback2});
+```
+
 ## Observable pattern
 
 Each observable variable holds two subscribable events:
