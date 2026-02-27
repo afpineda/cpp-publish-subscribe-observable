@@ -93,7 +93,7 @@ To check subscription status (example):
 ```c++
 event<int>::subscription_handler subscription1;
 ...
-if (subscription1.is_subscribed()) {
+if (subscription1) {
   ...
 }
 ```

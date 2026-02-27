@@ -67,9 +67,9 @@ void test1()
     cout << "- Subscribe/unsubscribe non-member function -" << endl;
     event evt;
     auto sh = evt.subscribe(Mock::class_callback);
-    assert(sh.is_subscribed());
+    assert(sh);
     evt.unsubscribe(sh);
-    assert(!sh.is_subscribed());
+    assert(!sh);
 }
 
 void test2()
@@ -78,19 +78,19 @@ void test2()
     event evt;
 
     auto sh1 = evt.subscribe(&Mock::member_callback, &mock1);
-    assert(sh1.is_subscribed());
+    assert(sh1);
 
     auto sh2 = evt.subscribe(&Mock::member_callback, &mock2);
-    assert(sh1.is_subscribed());
-    assert(sh2.is_subscribed());
+    assert(sh1);
+    assert(sh2);
 
     evt.unsubscribe(sh1);
-    assert(!sh1.is_subscribed());
-    assert(sh2.is_subscribed());
+    assert(!sh1);
+    assert(sh2);
 
     evt.unsubscribe(sh2);
-    assert(!sh1.is_subscribed());
-    assert(!sh2.is_subscribed());
+    assert(!sh1);
+    assert(!sh2);
 }
 
 void test3()
@@ -126,9 +126,9 @@ void test4()
     auto sh2 = evt.subscribe(Mock::class_callback);
     auto sh3 = evt.subscribe(Mock::class_callback);
     assert(evt.subscribed() == 3);
-    assert(sh1.is_subscribed());
-    assert(sh2.is_subscribed());
-    assert(sh3.is_subscribed());
+    assert(sh1);
+    assert(sh2);
+    assert(sh3);
 
     Mock::class_clear();
     assert(!Mock::class_executed);
@@ -151,7 +151,7 @@ void test4()
     evt.unsubscribe(sh1);
     evt.unsubscribe(sh1);
     evt.unsubscribe(sh1);
-    assert(!sh1.is_subscribed());
+    assert(!sh1);
     assert(evt.subscribed() == 0);
     Mock::class_clear();
     evt();
@@ -170,13 +170,13 @@ void test5()
     evt2.unsubscribe(sh);
     assert(evt1.subscribed() == 1);
     assert(evt2.subscribed() == 0);
-    assert(sh.is_subscribed());
+    assert(sh);
 
     event<>::subscription_handler orphan;
-    assert(!orphan.is_subscribed());
+    assert(!orphan);
     evt1.unsubscribe(orphan);
     assert(evt1.subscribed() == 1);
-    assert(!orphan.is_subscribed());
+    assert(!orphan);
 }
 
 void test6()
@@ -250,10 +250,10 @@ void test8()
     };
 
     auto sh1 = evt.subscribe(lambda1);
-    assert(sh1.is_subscribed());
+    assert(sh1);
     assert(evt.subscribed() == 1);
     auto sh2 = evt.subscribe(lambda2);
-    assert(sh2.is_subscribed());
+    assert(sh2);
     assert(evt.subscribed() == 2);
 
     evt.unsubscribe(sh2);
@@ -278,10 +278,10 @@ void test9()
     };
 
     auto sh1 = evt.subscribe(lambda1);
-    assert(sh1.is_subscribed());
+    assert(sh1);
     assert(evt.subscribed() == 1);
     auto sh2 = evt.subscribe(lambda2);
-    assert(sh2.is_subscribed());
+    assert(sh2);
     assert(evt.subscribed() == 2);
 
     evt(1);
@@ -307,19 +307,19 @@ void test10()
     event evt;
 
     auto sh1 = evt.subscribe(::std::bind(&Mock::member_callback, &mock1));
-    assert(sh1.is_subscribed());
+    assert(sh1);
 
     auto sh2 = evt.subscribe(::std::bind(&Mock::member_callback, &mock2));
-    assert(sh1.is_subscribed());
-    assert(sh2.is_subscribed());
+    assert(sh1);
+    assert(sh2);
 
     evt.unsubscribe(sh1);
-    assert(!sh1.is_subscribed());
-    assert(sh2.is_subscribed());
+    assert(!sh1);
+    assert(sh2);
 
     evt.unsubscribe(sh2);
-    assert(!sh1.is_subscribed());
-    assert(!sh2.is_subscribed());
+    assert(!sh1);
+    assert(!sh2);
 }
 
 void test11()
@@ -338,7 +338,7 @@ void test11()
     assert(mock2.executed);
 
     evt -= sh1;
-    assert(!sh1.is_subscribed());
+    assert(!sh1);
 }
 
 //------------------------------------------------------------------------------

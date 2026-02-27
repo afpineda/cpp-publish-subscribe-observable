@@ -61,6 +61,8 @@ public:
         /**
          * @brief Check if subscribed
          *
+         * @deprecated Use the bool typecast operator
+         *
          * @return true if subscribed
          * @return false otherwise
          */
@@ -68,6 +70,14 @@ public:
         {
             return (owner != nullptr);
         }
+
+        /**
+         * @brief Check if subscribed
+         *
+         * @return true if subscribed
+         * @return false otherwise
+         */
+        constexpr operator bool() const noexcept { return (owner != nullptr); }
 
         /// @brief Default constructor
         constexpr subscription_handler() noexcept = default;

@@ -54,6 +54,8 @@ public:
     /**
      * @brief Subscribe forever
      *
+     * @note Syntactic sugar
+     *
      * @param callback Callback function to be called on event dispatch
      * @return type& This instance
      */
