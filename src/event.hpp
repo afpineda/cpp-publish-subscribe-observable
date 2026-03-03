@@ -33,8 +33,22 @@ class event
 public:
     /// @brief This type
     using type = event<Args...>;
-    /// @brief Callback type
+    /// @brief Callback type for subscribers
     using callback_type = typename ::std::function<void(Args...)>;
+    /// @brief Callback for event dispatching (optional)
+    using dispatch_callback_type =
+        typename ::std::function<void(::std::size_t)>;
+
+    /**
+     * @brief Function to be called on event dispatch after
+     *        each subscribed callback
+     *
+     * @details If provided, this function runs after each subscribed callback
+     *          has finished and before the next one begins.
+     *
+     * @note Use this callback to reset watchdog timers or yield tasks.
+     */
+    dispatch_callback_type on_dispatch{nullptr};
 
     /**
      * @brief Subscription handler for managing callback lifetimes
@@ -210,8 +224,13 @@ public:
     void operator()(const Args &...args)
     {
         ::std::shared_lock<::std::shared_mutex> guard(subscribe_mutex);
+        ::std::size_t counter = 0;
         for (const auto &entry : _subscriptions)
+        {
             entry.callback(args...);
+            if (on_dispatch)
+                on_dispatch(++counter);
+        }
     }
 
     /**
@@ -222,8 +241,13 @@ public:
     void operator()(const Args &...args) const
     {
         ::std::shared_lock<::std::shared_mutex> guard(subscribe_mutex);
+        ::std::size_t counter = 0;
         for (const auto &entry : _subscriptions)
+        {
             entry.callback(args...);
+            if (on_dispatch)
+                on_dispatch(++counter);
+        }
     }
 
     /**

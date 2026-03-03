@@ -23,6 +23,7 @@ struct Mock
     bool executed = false;
     inline static bool class_executed = false;
     inline static int class_executed_counter = 0;
+    inline static ::std::size_t dispatch_counter = 0;
 
     void clear()
     {
@@ -33,6 +34,7 @@ struct Mock
     {
         class_executed = false;
         class_executed_counter = 0;
+        dispatch_counter = 0;
     }
 
     void member_callback()
@@ -44,6 +46,11 @@ struct Mock
     {
         class_executed = true;
         class_executed_counter++;
+    }
+
+    static void on_dispatch_callback(::std::size_t c)
+    {
+        dispatch_counter = c;
     }
 } mock1, mock2;
 
@@ -341,6 +348,21 @@ void test11()
     assert(!sh1);
 }
 
+void test12()
+{
+    cout << "- on_dispatch -" << endl;
+    event evt;
+    evt.on_dispatch = Mock::on_dispatch_callback;
+    Mock::class_clear();
+    assert(Mock::dispatch_counter == 0);
+
+    evt += Mock::class_callback;
+    evt += Mock::class_callback;
+    evt += Mock::class_callback;
+    evt();
+    assert(Mock::dispatch_counter == 3);
+}
+
 //------------------------------------------------------------------------------
 // Main
 //------------------------------------------------------------------------------
@@ -358,5 +380,6 @@ int main()
     test9();
     test10();
     test11();
+    test12();
     return 0;
 }

@@ -22,6 +22,7 @@ static int mock1_witness = 0;
 static int mock2_witness = 0;
 static bool mock3_witness = false;
 static bool mock4_witness = false;
+static ::std::size_t dispatch_counter = 0;
 
 void reset_mock_witnesses()
 {
@@ -29,6 +30,7 @@ void reset_mock_witnesses()
     mock2_witness = 0;
     mock3_witness = false;
     mock4_witness = false;
+    dispatch_counter = 0;
 }
 
 void mock1(int n)
@@ -49,6 +51,11 @@ void mock3()
 void mock4()
 {
     mock4_witness = true;
+}
+
+void on_dispatch_callback(::std::size_t c)
+{
+    dispatch_counter = c;
 }
 
 //------------------------------------------------------------------------------
@@ -145,7 +152,7 @@ void test4()
 
         dest = ::std::move(source);
         assert(!(source == dest));
-        assert(source.subscribed()==0);
+        assert(source.subscribed() == 0);
     }
     {
         // move constructor
@@ -155,8 +162,22 @@ void test4()
 
         static_event dest{::std::move(source)};
         assert(!(source == dest));
-        assert(source.subscribed()==0);
+        assert(source.subscribed() == 0);
     }
+}
+
+void test5()
+{
+    cout << "- on_dispatch -" << endl;
+    static_event<int> evt;
+    evt.on_dispatch = on_dispatch_callback;
+    reset_mock_witnesses();
+    assert(dispatch_counter == 0);
+
+    evt += mock1;
+    evt += mock2;
+    evt(1);
+    assert(dispatch_counter == 2);
 }
 
 //------------------------------------------------------------------------------
@@ -168,6 +189,6 @@ int main()
     test1();
     test2();
     test3();
-    test4();
+    test5();
     return 0;
 }

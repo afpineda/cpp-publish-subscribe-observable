@@ -157,6 +157,42 @@ void callback2(int n) { ... }
 static_event<int> static_event_example({callback1, callback2});
 ```
 
+### Prevent starvation or watchdog timers being triggered
+
+If there too many callbacks subscribed, other threads could starve or a
+watchdog timer could trigger (mostly on embedded systems)
+while they are executing.
+
+To prevent this, attach another callback function to the `on_dispatch` member.
+This function will be executed after each subscribed callback
+and before the next one.
+The argument is the count of subscribed callbacks previously executed on
+a single event dispatch.
+
+For example:
+
+```c++
+void prevent_watchdog(::std::size_t counter)
+{
+    if ((counter % 20) == 0)
+      // Reset the watchdog timer once for every 20 subscribers
+      os.watchdog_timer.reset();
+}
+...
+on_message.on_dispatch = prevent_watchdog;
+```
+
+Another example:
+
+```c++
+void prevent_starvation(::std::size_t counter)
+{
+    ::std::this_thread::yield();
+}
+...
+on_message.on_dispatch = prevent_starvation;
+```
+
 ## Observable pattern
 
 Each observable variable holds two subscribable events:
