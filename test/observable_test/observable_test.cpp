@@ -63,7 +63,7 @@ struct ItemMock
 
 void test1()
 {
-    cout << "- Default constructors and assignments" << endl;
+    cout << "- Constructors and assignments" << endl;
     {
         // move constructor
         observable<int> source{100};
@@ -90,11 +90,16 @@ void test1()
         dest = source;
         assert(dest == 100);
     }
+    {
+        // default constructor
+        observable<int> source;
+        assert(source == 0);
+    }
 }
 
 void test2()
 {
-    cout << "- Default constructors and assignments (readonly)" << endl;
+    cout << "- Constructors and assignments (readonly)" << endl;
     observable<int> private_source{100};
     observable<int> private_dest{0};
     {

@@ -12,6 +12,7 @@
 #pragma once
 
 #include "event.hpp"
+#include <utility>
 
 /**
  * @brief Observable variable
@@ -37,8 +38,14 @@ struct observable
 
     //.... Constructors ....
 
-    /// @brief Default initialization constructor
-    constexpr observable() : _var{} {}
+    /**
+     * @brief Constructor template
+     *
+     * @tparam Args Parameter types
+     */
+    template <typename... Args>
+    constexpr observable(Args... args)
+        : _var{::std::forward<Args>(args)...} {}
 
     /// @brief Initialization constructor
     /// @param initial_value Initial value
